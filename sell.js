@@ -44,7 +44,7 @@ Logger.info("==========================KEYS===============================");
 // 安全：助记词/API key 打码显示，避免暴露（GitHub Actions 日志公开）
 const mask = (s, keep = 6) => s ? s.slice(0, keep) + "..." + s.slice(-4) : "(未设置)";
 Logger.warn(`WALLET_INDEX = ${WALLET_INDEX}`);
-Logger.warn(`NODE_API_KEY = ${mask(INFURA_KEY, 8)}`);
+Logger.warn(`INFURA_KEY(旧,仅日志) = ${mask(INFURA_KEY, 8)}`);
 Logger.warn(`NFT_CONTRACT_ADDRESS = ${NFT_CONTRACT_ADDRESS}`);
 Logger.warn(`OWNER_ADDRESS = ${OWNER_ADDRESS}`);
 Logger.warn(`NETWORK = ${NETWORK}`);
@@ -130,6 +130,7 @@ for (const infuraKey of INFURA_KEYS) {
     }
 }
 Logger.warn(`轮动组合 = ${openseaSDKs.length} 个（API ${API_KEYS.length} × Infura ${INFURA_KEYS.length}）`);
+Logger.warn(`INFURA 首个新 key = ${mask(INFURA_KEYS[0], 6)}`);
 let sdkIdx = 0;
 
 function isFileExisted(filepath) {
@@ -308,6 +309,23 @@ async function main() {
 
     } catch (e) {
         const errMsg = (e && e.message) ? e.message : String(e);
+        // enforcement 提示：OpenSea 版税强制校验提示，但订单实际已创建（网页显示+可购买）→ 当作成功
+        if (/enforcement/i.test(errMsg)) {
+            Logger.warn(`⚠️ enforcement 提示（订单已创建）: ${tokens[current_index]}  | ${errMsg.slice(0, 60)}`);
+            record_list_time(tokens[current_index]);
+            err_retrycount = 0;
+            lastActivity = Date.now();
+            if (current_index >= tokens.length - 1) {
+                current_index = 0;
+            } else {
+                current_index += 1;
+            }
+            recordListIndex(current_index);
+            if (intervalTime > 0) {
+                await wait(intervalTime);
+            }
+            return;
+        }
         // 已卖出/无效资产类错误 → 剔除该 token，继续下一个
         if (/404|not found|does not exist|doesn'?t exist|no asset|invalid asset|not indexed|NOT_FOUND|asset.*not/i.test(errMsg)) {
             Logger.warn(`🚫 token 已卖出/无效，剔除: ${tokens[current_index]}  | ${errMsg.slice(0, 80)}`);
